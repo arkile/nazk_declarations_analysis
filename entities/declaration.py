@@ -1,5 +1,7 @@
-from .declaration_details import Person, Property
-from .finances import SavingsEntry, EarningsEntry
+from .person import Person
+from .property import Property
+from .savings import SavingsEntry
+from .earnings import EarningsEntry
 
 # TODO rewrite as dataclass
 class Declaration:

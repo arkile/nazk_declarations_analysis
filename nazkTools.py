@@ -3,8 +3,10 @@ import json
 
 import reports
 from entities.declaration import *
-from entities.finances import *
-from entities.declaration_details import *
+from entities.earnings import *
+from entities.savings import *
+from entities.person import *
+from entities.property import *
 from reports import *
 
 import logging as log
