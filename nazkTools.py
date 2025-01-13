@@ -7,6 +7,7 @@ from entities.earnings import *
 from entities.savings import *
 from entities.person import *
 from entities.property import *
+from entities.vehicle import get_vehicle_entries
 from reports import *
 
 import logging as log
@@ -102,7 +103,9 @@ def load_full_declaration(declaration) -> Declaration:
                 log.warning(f'No persons found in declaration {declaration.declaration_id}')
                 report.add_record(ReportLevel.STEP, 'No family members declared in this declaration')
             if i_ == 3:
-                log.warning(f'No persons found in declaration {declaration.declaration_id}')
+                log.warning(f'No real estate property found in declaration {declaration.declaration_id}')
+            if i_ == 6:
+                log.warning(f'No vehicles found in declaration {declaration.declaration_id}')
             if i_ == 11:
                 log.warning(f'Earnings not found in declaration {declaration.declaration_id}')
                 # report.add_record(ReportLevel.STEP, 'No earnings declared in this declaration', critical=3)
@@ -121,7 +124,7 @@ def load_full_declaration(declaration) -> Declaration:
                     log.error(f'KeyException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
                               f'while loading full declaration, step 2')
                     log.exception('')
-            if i_ == 3:
+            if i_ == 3:  # Нерухомість
                 try:
                     declaration.property_list = get_property_entries(data['data']['step_' + str(i_)]['data'])
                 except KeyError:
@@ -129,8 +132,21 @@ def load_full_declaration(declaration) -> Declaration:
                               f'while loading full declaration, step 3')
                     log.exception('')
                 except BaseException as e:
-                    log.error(f'KeyException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
+                    log.error(f'BaseException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
                               f'while loading full declaration, step 3')
+                    log.exception(e)
+            if i_ == 6:  # Рухоме майно (транспортні засоби)
+                try:
+                    declaration.vehicle_list = get_vehicle_entries(data['data']['step_' + str(i_)]['data'])
+                except KeyError:
+                    log.error(
+                        f'KeyException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
+                        f'while loading full declaration, step 6')
+                    log.exception('')
+                except BaseException as e:
+                    log.error(
+                        f'BaseException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
+                        f'while loading full declaration, step 6')
                     log.exception(e)
             if i_ == 11:  # Доходи, у тому числі подарунки
                 declaration.earnings = get_earnings_entries(data['data']['step_' + str(i_)]['data'])
@@ -152,18 +168,23 @@ def load_full_declaration(declaration) -> Declaration:
 def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
     report.add_record(ReportLevel.TOP, f'Декларація {curr_decl.written_type} за {curr_decl.year} рік')
     log.debug(f'Report row added: Declaration {curr_decl.written_type}, year {curr_decl.year}')
-    # compare property
+    # compare property - step 3
     if not bool(curr_decl.property_list):
-        report.add_record(ReportLevel.STEP, 'Нерухомість: Не задекларовано жодного об\'єкта нерухомості')
+        report.add_record(ReportLevel.STEP, 'Нерухомість:   Не задекларовано жодного об\'єкта нерухомості')
     else:
         report.add_record(ReportLevel.STEP, 'Нерухомість: ')
     compare_property_list(prev_decl, curr_decl) # if curr is emtpy, reports removed if any
-    # compare cars
-    # compare earnings
+    # compare cars - step 6
+    if not bool(curr_decl.vehicle_list):
+        report.add_record(ReportLevel.STEP, 'Рухоме майно (транспортні засоби) - не задекларовано')
+    else:
+        report.add_record(ReportLevel.STEP, 'Рухоме майно: ')
+    compare_vehicle_list(prev_decl, curr_decl)
+    # compare earnings - step 11
     if not bool(curr_decl.earnings_by_person):
         report.add_record(ReportLevel.STEP, 'Доходи: Не задекларовано жодних доходів', critical=3)
 
-    # compare savings
+    # compare savings - step 12
     if not bool(curr_decl.savings_by_person):
         report.add_record(ReportLevel.STEP, 'Грошові активи: Не задекларовано жодних грошових активів', critical=3)
         get_savings_diff_by_person(prev_decl, curr_decl) # to print all those who were in previous declaration, but aren't present here
@@ -258,15 +279,37 @@ def compare_property_list(prev_decl: Declaration, curr_decl: Declaration):
             if prop == old_prop:
                 change_ = prop.has_changed(old_prop)
                 if change_:
-                    log.debug(f'Property change detected, concatenated outcome: {change_}')
+                    log.debug(f'Property change computed, concatenated outcome: {change_}')
                     report.add_record(ReportLevel.DETAILS, change_)
-        if prop.get_year_acquired() > (curr_decl.year-2) and not prop.cost:
+        if prop.get_year_acquired() >= (curr_decl.year-2): # check recent purchases/acquisitions
             if not prop.cost:
                 log.debug(f'Property price not declared, but acquisition date is recent for property: {prop}')
                 report.add_record(ReportLevel.DETAILS, f'Власність набута нещодавно, проте вартість не вказана: {prop}')
             elif not prop.cost.isdigit() and 'Родич' in prop.cost:
                 log.debug(f'Property price not declared by a relative, but acquisition date is recent for property: {prop}')
                 report.add_record(ReportLevel.DETAILS, f'Власність набута родичами нещодавно, проте родичі не надали інформацію про ціну: {prop}')
+
+
+def compare_vehicle_list(prev_decl: Declaration, curr_decl: Declaration):
+    added_ = [vehicle for vehicle in curr_decl.vehicle_list if vehicle not in prev_decl.vehicle_list]
+    removed_ = [vehicle for vehicle in prev_decl.vehicle_list if vehicle not in curr_decl.vehicle_list]
+    for vehicle in removed_:
+        log.debug(f'Removed vehicle: {vehicle}')
+        report.add_record(ReportLevel.DETAILS, f'Видалено нерухоме майно (транспортний засіб): {vehicle}')
+    for vehicle in added_:
+        log.debug(f'Added vehicle: {vehicle}')
+        report.add_record(ReportLevel.DETAILS, f'Додано нерухоме майно (транспортний засіб): {vehicle}')
+    for vehicle in curr_decl.vehicle_list:
+        for old_vehicle in prev_decl.vehicle_list:
+            if vehicle == old_vehicle:
+                change_ = vehicle.get_changes_since(old_vehicle)
+                if change_:
+                    log.debug(f'Changes in vehicle list computed, concatenated outcome: {change_}')
+                    report.add_record(ReportLevel.DETAILS, change_)
+        if vehicle.get_acquire_year() >= (curr_decl.year - 2) and (not vehicle.cost or not str(vehicle.cost).isdecimal()):
+            log.debug(f'Vehicle price not declared, but acquisition date is recent for property: {vehicle}')
+            report.add_record(ReportLevel.DETAILS,
+                        f'Рухоме майно (транспортний засіб) набуте нещодавно, проте вартість не вказана: {vehicle}')
 
 
 # ----------------------------

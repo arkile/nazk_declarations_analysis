@@ -2,6 +2,8 @@ from .person import Person
 from .property import Property
 from .savings import SavingsEntry
 from .earnings import EarningsEntry
+from .vehicle import Vehicle
+
 
 # TODO rewrite as dataclass
 class Declaration:
@@ -68,6 +70,7 @@ class Declaration:
         self.full_name = None
         self.persons: dict[str, Person] = {}
         self.property_list: list[Property] = []
+        self.vehicle_list: list[Vehicle] = []
         self.savings: list[SavingsEntry] = []
         self.earnings: list[EarningsEntry] = []
         self.savings_by_person: dict[str|int, int|float] = {}
