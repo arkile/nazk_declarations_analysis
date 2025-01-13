@@ -26,17 +26,17 @@ class Report(object):
     def add_record(self, report_level: ReportLevel, line: str, critical: int = 1):
         self.text += '\n'
         self.text += '\t' * (report_level.value - 1)
-        line.replace('\n', '\n' + ('\t' * (report_level.value - 1)))
+        line_ = line.replace('\n', '\n' + ('\t' * (report_level.value - 1)), -1)
         if critical == 2:
-            line_ = '! ' + line + ' !'
+            line_ = '! ' + line_ + ' !'
             self.text += line_
             self.summary += f'\n {line_}'
         elif critical == 3:
-            line_ = '!!! ' + line + ' !!!'
+            line_ = '!!! ' + line_ + ' !!!'
             self.text += line_
             self.summary += f'\n {line_}'
         else:
-            self.text += line
+            self.text += line_
         return self
 
     def add_empty_line(self):
