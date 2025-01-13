@@ -18,9 +18,9 @@ DOC_ADDRESS = 'https://public-api.nazk.gov.ua/v2/documents/'
 log.basicConfig(format='{asctime} [{levelname}] {message}',
                 style='{',
                 datefmt="%H:%M", # datefmt="%Y-%m-%d %H:%M",
-                level=log.DEBUG)
+                # level=log.DEBUG)
                 # level=log.INFO)
-                # level=log.WARNING)
+                level=log.WARNING)
 
 report = reports.init_new_report()
 

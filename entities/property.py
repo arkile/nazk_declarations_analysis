@@ -14,22 +14,22 @@ class Property:
     def has_changed(self, other):
         change:str = ''
         if self.owners != other.owners:
-            change += f'Власники змінились {self.__repr__()} \n' # TODO expand on this
+            change += f'\n  - власники змінились {self.__repr__()}' # TODO expand on this
         if self.ownership_type != other.ownership_type:
-            change += f'Тип власності змінився з {self.ownership_type} на {other.ownership_type}. \n'
+            change += f'\n  - тип власності змінився з {self.ownership_type} на {other.ownership_type}.'
         if (self.place.lower() != other.place.lower()
                 and self.place.lower() not in other.place.lower()
                 and other.place.lower() not in self.place.lower()):
-            change += f'Місце реєстрації змінилось із {self.place} на {other.place} (тип, площа та дата набуття однакові). \n'
+            change += f'\n  - місце реєстрації змінилось із {self.place} на {other.place} (тип, площа та дата набуття однакові).'
         if not self.cost and other.cost:
-            change += f'Вартість була вказана у попередній декларації: {other.cost} , але не вказана у цій. \n'
+            change += f'\n  - вартість була вказана у попередній декларації: {other.cost} , але не вказана у цій.'
         elif not other.cost and self.cost:
-            change += f'Вартість не була вказана раніше, проте вказана зараз: {self.cost} . \n'
+            change += f'\n  - вартість не була вказана раніше, проте вказана зараз: {self.cost} .'
         elif self.cost and other.cost and self.cost != other.cost:
-            change += f'Вартість змінилась із {self.cost} на {other.cost}. \n'
+            change += f'\n  - вартість змінилась із {self.cost} на {other.cost}.'
 
         if len(change) != 0:  # or simply if(change) ?
-            change += f'{self.__repr__()} \n'
+            change = f'{self.__repr__()}:' + change
         return change
 
     def get_year_acquired(self):
@@ -38,7 +38,7 @@ class Property:
         else:
             _year = self.acquire_date[-4:]
         assert(len(_year) == 4)
-        return _year
+        return int(_year)
 
     def __eq__(self, other):
         return (self.property_type == other.property_type
@@ -46,10 +46,10 @@ class Property:
                 and self.acquire_date == other.acquire_date)
 
     def __str__(self):
-        return f"Property '{self.property_type}' (acquired: {self.acquire_date}, total area:{self.total_area})"
+        return f"Власність '{self.property_type}' (набута: {self.acquire_date}, загальна площа: {self.total_area}, ціна: {self.cost})"
 
     def __repr__(self):
-        return self.__str__()
+        return f"Власність '{self.property_type}' (набута: {self.acquire_date}, загальна площа: {self.total_area}, ціна: {self.cost})"
 
 
 # -------- Tools ----------
@@ -80,15 +80,28 @@ def get_property_entries(step3_data: list[dict]) -> list[Property]:
         else:
             raise BaseException("No city or ua_cityType found")
         ownership_type = entry_['rights'][0]['ownershipType']
-        owners = {item['rightBelongs'] : item['percent-ownership'] for item in entry_['rights']}
+        if 'власність' in ownership_type.lower():
+            owners = {}
+            for item in entry_['rights']:
+                if 'percent-ownership' in item:
+                    owners[item['rightBelongs']] = item['percent-ownership']
+                elif 'percentownership' in item:
+                    owners[item['rightBelongs']] = item['percentownership']
+                elif len(item.keys()) == 2 and 'ownershipType' in item and 'rightBelongs' in item:
+                    owners[item['rightBelongs']] = '100'
+                else:
+                    raise BaseException(f'ownership percentage is absent in step_3 for step3_data entry {entry_}')
+        else:
+            # для випадків типу оренди - тоді ключ - той, хто використовує/розпоряджається згідно декларації
+            owners = {entry_['rights'][0]['rightBelongs'] : '0'}
         if 'cost_date_assessment' in entry_ and entry_['cost_date_assessment']:
             cost = _parse_cost_assessment(entry_['cost_date_assessment'])
         elif 'costAssessment' in entry_ and entry_['costAssessment']:
             cost = _parse_cost_assessment(entry_['costAssessment'])
         else:
-            raise BaseException("No cost assessment found")
+            raise BaseException(f'No cost assessment found for step3_data entry {entry_}')
         property_ = Property(place=place, property_type=entry_['objectType'],
-                             acquire_date=entry_['owningDate'], total_area=float(entry_['totalArea']),
+                             acquire_date=entry_['owningDate'], total_area=float(entry_['totalArea'].replace(',', '.')),
                              ownership_type=ownership_type, owners=owners, cost=cost)
         property_list.append(property_)
     return property_list
