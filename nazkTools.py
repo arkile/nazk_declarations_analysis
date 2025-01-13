@@ -277,7 +277,7 @@ def compare_property_list(prev_decl: Declaration, curr_decl: Declaration):
     for prop in curr_decl.property_list:
         for old_prop in prev_decl.property_list:
             if prop == old_prop:
-                change_ = prop.has_changed(old_prop)
+                change_ = prop.get_changes_since(old_prop)
                 if change_:
                     log.debug(f'Property change computed, concatenated outcome: {change_}')
                     report.add_record(ReportLevel.DETAILS, change_)
@@ -285,7 +285,7 @@ def compare_property_list(prev_decl: Declaration, curr_decl: Declaration):
             if not prop.cost:
                 log.debug(f'Property price not declared, but acquisition date is recent for property: {prop}')
                 report.add_record(ReportLevel.DETAILS, f'Власність набута нещодавно, проте вартість не вказана: {prop}')
-            elif not prop.cost.isdigit() and 'Родич' in prop.cost:
+            elif not str(prop.cost).isdigit() and 'родич' in prop.cost.lower():
                 log.debug(f'Property price not declared by a relative, but acquisition date is recent for property: {prop}')
                 report.add_record(ReportLevel.DETAILS, f'Власність набута родичами нещодавно, проте родичі не надали інформацію про ціну: {prop}')
 

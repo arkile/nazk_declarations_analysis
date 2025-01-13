@@ -11,8 +11,9 @@ class Property:
         self.owners: dict[int: str] = owners
         self.cost: int | str = cost
 
-    def has_changed(self, other):
-        change:str = ''
+    def get_changes_since(self, other):
+        #TODO add logs
+        change: str = ''
         if self.owners != other.owners:
             change += f'\n  - власники змінились {self.__repr__()}' # TODO expand on this
         if self.ownership_type != other.ownership_type:
@@ -22,11 +23,11 @@ class Property:
                 and other.place.lower() not in self.place.lower()):
             change += f'\n  - місце реєстрації змінилось із {self.place} на {other.place} (тип, площа та дата набуття однакові).'
         if not self.cost and other.cost:
-            change += f'\n  - вартість була вказана у попередній декларації: {other.cost} , але не вказана у цій.'
+            change += f'\n  - вартість була вказана у попередній декларації: {other.cost} грн, але не вказана у цій.'
         elif not other.cost and self.cost:
-            change += f'\n  - вартість не була вказана раніше, проте вказана зараз: {self.cost} .'
+            change += f'\n  - вартість не була вказана раніше, проте вказана зараз: {self.cost} грн.'
         elif self.cost and other.cost and self.cost != other.cost:
-            change += f'\n  - вартість змінилась із {self.cost} на {other.cost}.'
+            change += f'\n  - вартість змінилась із {other.cost} грн на {self.cost} грн.'
 
         if len(change) != 0:  # or simply if(change) ?
             change = f'{self.__repr__()}:' + change
@@ -48,10 +49,10 @@ class Property:
                 and self.acquire_date == other.acquire_date)
 
     def __str__(self):
-        return f"Власність '{self.property_type}' (набута: {self.acquire_date}, загальна площа: {self.total_area}, ціна: {self.cost})"
+        return f"Власність '{self.property_type}' (набута: {self.acquire_date}, загальна площа: {self.total_area} кв.м., ціна: {self.cost} грн)"
 
     def __repr__(self):
-        return f"Власність '{self.property_type}' (набута: {self.acquire_date}, загальна площа: {self.total_area}, ціна: {self.cost})"
+        return f"Власність '{self.property_type}' (набута: {self.acquire_date}, загальна площа: {self.total_area} кв.м., ціна: {self.cost} грн)"
 
 
 # -------- Tools ----------
@@ -75,7 +76,9 @@ def _parse_cost_assessment(cost_assessment: str) -> int | str:
 def get_property_entries(step3_data: list[dict]) -> list[Property]:
     property_list: list[Property] = []
     for entry_ in step3_data:
-        if 'city' in entry_:
+        if 'city_txt' in entry_:
+            place = entry_['city_txt']
+        elif 'city' in entry_:
             place = entry_['city']
         elif 'ua_cityType' in entry_:
             place = entry_['ua_cityType']
