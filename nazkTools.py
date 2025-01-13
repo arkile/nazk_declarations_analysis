@@ -101,6 +101,8 @@ def load_full_declaration(declaration) -> Declaration:
             if i_ == 2:
                 log.warning(f'No persons found in declaration {declaration.declaration_id}')
                 report.add_record(ReportLevel.STEP, 'No family members declared in this declaration')
+            if i_ == 3:
+                log.warning(f'No persons found in declaration {declaration.declaration_id}')
             if i_ == 11:
                 log.warning(f'Earnings not found in declaration {declaration.declaration_id}')
                 # report.add_record(ReportLevel.STEP, 'No earnings declared in this declaration', critical=3)
@@ -116,8 +118,20 @@ def load_full_declaration(declaration) -> Declaration:
                     declaration.persons = get_person_entries(data['data']['step_' + str(i_)]['data'])
                     log.debug('related persons loaded')
                 except KeyError:
-                    log.error(f'KeyException caught in declaration {declaration.declaration_id}, year: {declaration.year}')
+                    log.error(f'KeyException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
+                              f'while loading full declaration, step 2')
                     log.exception('')
+            if i_ == 3:
+                try:
+                    declaration.property_list = get_property_entries(data['data']['step_' + str(i_)]['data'])
+                except KeyError:
+                    log.error(f'KeyException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
+                              f'while loading full declaration, step 3')
+                    log.exception('')
+                except BaseException as e:
+                    log.error(f'KeyException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
+                              f'while loading full declaration, step 3')
+                    log.exception(e)
             if i_ == 11:  # Доходи, у тому числі подарунки
                 declaration.earnings = get_earnings_entries(data['data']['step_' + str(i_)]['data'])
                 log.debug('earnings loaded')
@@ -237,7 +251,6 @@ def compare_property_list(prev_decl: Declaration, curr_decl: Declaration):
     for prop in added_:
         log.debug(f'Added property: {prop}')
         report.add_record(ReportLevel.DETAILS, f'Додано нерухомість: {prop}')
-        # TODO: додати перевірку на невідому ціну за останні роки; "родич не надав інфо"; зміну на пусту ціну
         # if str(curr_decl.year) in prop.acquire_date or :
         #     report.add_record(ReportLevel.DETAILS, f'')
     for prop in curr_decl.property_list:
@@ -245,8 +258,15 @@ def compare_property_list(prev_decl: Declaration, curr_decl: Declaration):
             if prop == old_prop:
                 change_ = prop.has_changed(old_prop)
                 if change_:
-                    log.debug(change_)
+                    log.debug(f'Property change detected, concatenated outcome: {change_}')
                     report.add_record(ReportLevel.DETAILS, change_)
+        if prop.get_year_acquired() > (curr_decl.year-2) and not prop.cost:
+            if not prop.cost:
+                log.debug(f'Property price not declared, but acquisition date is recent for property: {prop}')
+                report.add_record(ReportLevel.DETAILS, f'Власність набута нещодавно, проте вартість не вказана: {prop}')
+            elif not prop.cost.isdigit() and 'Родич' in prop.cost:
+                log.debug(f'Property price not declared by a relative, but acquisition date is recent for property: {prop}')
+                report.add_record(ReportLevel.DETAILS, f'Власність набута родичами нещодавно, проте родичі не надали інформацію про ціну: {prop}')
 
 
 # ----------------------------

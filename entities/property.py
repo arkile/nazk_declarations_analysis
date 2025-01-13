@@ -9,21 +9,36 @@ class Property:
         self.total_area: float = float(total_area)
         self.ownership_type: str = ownership_type
         self.owners: dict[int: str] = owners
-        self.cost: int = int(cost)
+        self.cost: int | str = cost
 
     def has_changed(self, other):
         change:str = ''
         if self.owners != other.owners:
-            change += f'Warning: owners changed of {self.__repr__()} \n' # TODO expand on this
-        if self.cost != other.cost:
-            change += f'Warning: cost of property changed from {self.cost} to {other.cost}. {self.__repr__()} \n'
+            change += f'Власники змінились {self.__repr__()} \n' # TODO expand on this
         if self.ownership_type != other.ownership_type:
-            change += f'Warning: ownership type changed from {self.ownership_type} to {other.ownership_type}. {self.__repr__()} \n'
+            change += f'Тип власності змінився з {self.ownership_type} на {other.ownership_type}. \n'
         if (self.place.lower() != other.place.lower()
                 and self.place.lower() not in other.place.lower()
                 and other.place.lower() not in self.place.lower()):
-            change += f'Warning: place changed from {self.place} to {other.place}. {self.__repr__()} \n'
+            change += f'Місце реєстрації змінилось із {self.place} на {other.place} (тип, площа та дата набуття однакові). \n'
+        if not self.cost and other.cost:
+            change += f'Вартість була вказана у попередній декларації: {other.cost} , але не вказана у цій. \n'
+        elif not other.cost and self.cost:
+            change += f'Вартість не була вказана раніше, проте вказана зараз: {self.cost} . \n'
+        elif self.cost and other.cost and self.cost != other.cost:
+            change += f'Вартість змінилась із {self.cost} на {other.cost}. \n'
+
+        if len(change) != 0:  # or simply if(change) ?
+            change += f'{self.__repr__()} \n'
         return change
+
+    def get_year_acquired(self):
+        if len(self.acquire_date) == 4:
+            _year = self.acquire_date
+        else:
+            _year = self.acquire_date[-4:]
+        assert(len(_year) == 4)
+        return _year
 
     def __eq__(self, other):
         return (self.property_type == other.property_type
@@ -39,15 +54,20 @@ class Property:
 
 # -------- Tools ----------
 
-def is_valid_cost_assessment(cost_assessment: str) -> bool:
-    if not cost_assessment:
-        return False
-    elif cost_assessment == '[Не застосовується]':
-        return False
+def _parse_cost_assessment(cost_assessment: str) -> int | str:
+    if (not cost_assessment
+            or cost_assessment == '[Не застосовується]'
+            or cost_assessment == '[Не відомо]'
+            or cost_assessment == 'Не вказано'
+            or cost_assessment == '[Не вказано]'):
+        return ''
+    elif cost_assessment == 'Родич не надав інформацію' or 'Родич' in cost_assessment:
+        return cost_assessment
     elif cost_assessment.isdigit():
-        return True
+        return int(cost_assessment)
     else:
-        raise BaseException("Cost assessment is not valid")
+        raise BaseException("Cost assessment cannot be parsed")
+
 
 # parser for step_03
 def get_property_entries(step3_data: list[dict]) -> list[Property]:
@@ -62,9 +82,9 @@ def get_property_entries(step3_data: list[dict]) -> list[Property]:
         ownership_type = entry_['rights'][0]['ownershipType']
         owners = {item['rightBelongs'] : item['percent-ownership'] for item in entry_['rights']}
         if 'cost_date_assessment' in entry_ and entry_['cost_date_assessment']:
-            cost = is_valid_cost_assessment(entry_['cost_date_assessment'])
+            cost = _parse_cost_assessment(entry_['cost_date_assessment'])
         elif 'costAssessment' in entry_ and entry_['costAssessment']:
-            cost = is_valid_cost_assessment(entry_['costAssessment'])
+            cost = _parse_cost_assessment(entry_['costAssessment'])
         else:
             raise BaseException("No cost assessment found")
         property_ = Property(place=place, property_type=entry_['objectType'],

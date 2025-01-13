@@ -63,6 +63,10 @@ if __name__ == '__main__':
     # dict_intersection()
     # for xo, val in {'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5, 'f': 6}.items():
     #     print(val)
-    x = ('2022', '2024')
-    for i in range(int(x[0]), int(x[1])+1):
-        print(i)
+    # x = ('2022', '2024')
+    # for i in range(int(x[0]), int(x[1])+1):
+    #     print(i)
+    s = '12.12.2024'
+    ss = s[-4:]
+    assert(len(ss) == 4)
+    print(ss)
