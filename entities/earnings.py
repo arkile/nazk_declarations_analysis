@@ -38,7 +38,7 @@ def get_earnings_entries(step11_data: list[dict]) -> list[EarningsEntry]:
     return earnings_entries
 
 # splitter for step_11
-def sum_taxed_and_split_by_person(earnings_entries: list[EarningsEntry]):
+def sum_taxed_and_split_by_person(earnings_entries: list[EarningsEntry]) -> dict[str|int, int|float]:
     earnings_by_person = {}
     for entry_ in earnings_entries:
         if str(entry_.owner) in earnings_by_person:

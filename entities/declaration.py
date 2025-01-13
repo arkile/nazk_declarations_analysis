@@ -33,6 +33,7 @@ class Declaration:
             self.written_type = 'Про суттєві зміни у майновому стані'
         else:
             self.minor = False
+
         match declaration_type:
             case 1:
                 if type_ == 1:

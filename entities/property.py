@@ -49,7 +49,7 @@ def is_valid_cost_assessment(cost_assessment: str) -> bool:
     else:
         raise BaseException("Cost assessment is not valid")
 
-
+# parser for step_03
 def get_property_entries(step3_data: list[dict]) -> list[Property]:
     property_list: list[Property] = []
     for entry_ in step3_data:

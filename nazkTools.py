@@ -108,7 +108,6 @@ def load_full_declaration(declaration) -> Declaration:
                 log.warning(f'Savings not found in declaration {declaration.declaration_id}')
                 # report.add_record(ReportLevel.STEP, 'No savings declared in this declaration', critical=3)
             continue
-
         if 'data' in data['data']['step_' + str(i_)]:
             log.debug(f'data found for step {i_}')
             declaration.data['step_' + str(i_)] = data['data']['step_' + str(i_)]['data']
