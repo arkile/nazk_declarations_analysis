@@ -30,6 +30,8 @@ class Property:
 
         if len(change) != 0:  # or simply if(change) ?
             change = f'{self.__repr__()}:' + change
+        else:
+            change = f'Змін не виявлено:   {self.__repr__()}'
         return change
 
     def get_year_acquired(self):
