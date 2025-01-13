@@ -32,7 +32,7 @@ class Report(object):
             self.text += line_
             self.summary += f'\n {line_}'
         elif critical == 3:
-            line_ = '!!! ' + line_ + ' !!!'
+            line_ = line_ + ' !!!!!!!'
             self.text += line_
             self.summary += f'\n {line_}'
         else:

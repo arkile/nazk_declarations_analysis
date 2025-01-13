@@ -166,7 +166,8 @@ def load_full_declaration(declaration) -> Declaration:
 # --- Comparison functions ---
 #compares two full declarations
 def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
-    report.add_record(ReportLevel.TOP, f'Декларація {curr_decl.written_type} за {curr_decl.year} рік')
+    report.add_record(ReportLevel.TOP, f'Декларація {curr_decl.written_type} за {curr_decl.year} рік.'
+                                       f'           {DOC_ADDRESS+curr_decl.declaration_id}')
     log.debug(f'Report row added: Declaration {curr_decl.written_type}, year {curr_decl.year}')
     # compare property - step 3
     if not bool(curr_decl.property_list):
