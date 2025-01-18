@@ -47,3 +47,6 @@ def sum_taxed_and_split_by_person(earnings_entries: list[EarningsEntry]) -> dict
             earnings_by_person[entry_.owner] = round(entry_.amount_taxed, 2)
             log.debug(f'earnings entries taxed, split by person and summed up, result: {earnings_by_person}')
     return earnings_by_person
+
+def get_total_earnings(earnings_entries: list[EarningsEntry]) -> int:
+    return sum([entry_.amount for entry_ in earnings_entries])

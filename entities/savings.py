@@ -80,6 +80,17 @@ def get_savings_entries(step12_data: list[dict]) -> list[SavingsEntry]:
     # returns list of SavingsEntry objects
     return savings_entries
 
+# misc function
+def to_uah_by_yearly_avg(currency: str, amount: int|float, year: str|int) -> int:
+    if currency == 'UAH':
+        return int(amount)
+    elif currency == 'USD':
+        return int(amount * USD_AVG_EXCH_RATE[str(year)])
+    elif currency == 'EUR':
+        return int(amount * EUR_AVG_EXCH_RATE[str(year)])
+    else:
+        log.error(f'Unknown currency: {currency}')
+        raise BaseException(f'Unknown currency: {currency}')
 
 # # is it needed?
 # def get_converted_total_by_person(savings_entries: list[SavingsEntry], person_id: str, year: int) -> float:
@@ -90,7 +101,8 @@ def get_savings_entries(step12_data: list[dict]) -> list[SavingsEntry]:
 #     return total
 
 # converter + splitter for step_12
-def convert_and_split_by_person(savings_entries: list[SavingsEntry], year: int) -> dict[str|int, int|float]:
+# soon to be depricated
+def convert_and_split_by_person_v1(savings_entries: list[SavingsEntry], year: int) -> dict[str|int, int|float]:
     savings_by_person = {}
     for entry_ in savings_entries:
         if str(entry_.owner) in savings_by_person:
@@ -104,7 +116,8 @@ def convert_and_split_by_person(savings_entries: list[SavingsEntry], year: int) 
     return savings_by_person
 
 # splitter for step_12
-def split_by_person(savings_entries: list[SavingsEntry]) -> dict[str, dict[str, str|int]]:
+# returns dictionary in a format: {'person_id': {'currency': amount}}
+def split_by_person_avg(savings_entries: list[SavingsEntry]) -> dict[str, dict[str, str|int]]:
     savings_by_person = {}
     for entry_ in savings_entries:
         if entry_.owner in savings_by_person:
@@ -116,3 +129,18 @@ def split_by_person(savings_entries: list[SavingsEntry]) -> dict[str, dict[str, 
             savings_by_person[entry_.owner] = {entry_.currency: entry_.amount}
     log.debug(f'savings entries split by person, result: {savings_by_person}')
     return savings_by_person
+
+#returns {'currency': amount}
+def sum_savings_by_currency_avg(savings_entries: list[SavingsEntry]) -> dict[str, int|float]:
+    savings_by_currency = {}
+    for entry_ in savings_entries:
+        if entry_.currency in savings_by_currency:
+            savings_by_currency[entry_.currency] += entry_.amount
+        else:
+            savings_by_currency[entry_.currency] = entry_.amount
+    log.debug(f'savings entries summed up by currency, result: {savings_by_currency}')
+    return savings_by_currency
+
+# returns total amount of converted savings (converted by yearly average for each currency)
+def get_total_converted_avg(savings_by_currency: dict[str, int|float], year: str) -> int|float:
+    return sum( [to_uah_by_yearly_avg(curr, amount, year) for (curr, amount) in savings_by_currency.items()] )

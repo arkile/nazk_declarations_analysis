@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 import requests
 import json
 
@@ -156,9 +158,12 @@ def load_full_declaration(declaration) -> Declaration:
             if i_ == 12:  # Грошові активи
                 declaration.savings = get_savings_entries(data['data']['step_' + str(i_)]['data'])
                 log.debug('savings loaded')
-                # TODO: rewrite - get difference in currency by person, and only then convert
-                declaration.savings_by_person = convert_and_split_by_person(declaration.savings, declaration.year)
-                log.debug('savings converted and split by person')
+                # TODO line below works incorrectly, needs to be rewritten
+                # declaration.savings_by_person = convert_and_split_by_person_v1(declaration.savings, declaration.year)
+                declaration.savings_by_prsn_and_curr = split_by_person_avg(declaration.savings)
+                declaration.savings_by_currency = sum_savings_by_currency_avg(declaration.savings)
+                log.debug('savings split by person')
+
     return declaration
 
 # ----------------------------
@@ -169,43 +174,60 @@ def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
     report.add_record(ReportLevel.TOP, f'Декларація {curr_decl.written_type} за {curr_decl.year} рік.'
                                        f'           {DOC_ADDRESS+curr_decl.declaration_id}')
     log.debug(f'Report row added: Declaration {curr_decl.written_type}, year {curr_decl.year}')
+
     # compare property - step 3
     if not bool(curr_decl.property_list):
         report.add_record(ReportLevel.STEP, 'Нерухомість:   Не задекларовано жодного об\'єкта нерухомості')
     else:
         report.add_record(ReportLevel.STEP, 'Нерухомість: ')
     compare_property_list(prev_decl, curr_decl) # if curr is emtpy, reports removed if any
+
     # compare cars - step 6
     if not bool(curr_decl.vehicle_list):
         report.add_record(ReportLevel.STEP, 'Рухоме майно (транспортні засоби) - не задекларовано')
     else:
         report.add_record(ReportLevel.STEP, 'Рухоме майно: ')
-    compare_vehicle_list(prev_decl, curr_decl)
+    compare_vehicle_list(prev_decl, curr_decl) # should it be here or in the else block above?
+
     # compare earnings - step 11
     if not bool(curr_decl.earnings_by_person):
         report.add_record(ReportLevel.STEP, 'Доходи: Не задекларовано жодних доходів', critical=3)
+    else:
+        report.add_record(ReportLevel.STEP, 'Доходи: ')
+        total_income = sum([entry_.amount for entry_ in curr_decl.earnings])
+        report.add_record(ReportLevel.DETAILS, f'Загальний задекларований дохід: {total_income}')
+        total_income_taxed = sum([entry_.amount_taxed for entry_ in curr_decl.earnings])
+        report.add_record(ReportLevel.DETAILS,
+                          f'Загальний задекларований дохід після вирахування податків: {total_income_taxed}  '
+                          f' (податки вирахувані лише із відповідних категорій доходів)')
 
     # compare savings - step 12
-    if not bool(curr_decl.savings_by_person):
+    if not bool(curr_decl.savings_by_currency):
         report.add_record(ReportLevel.STEP, 'Грошові активи: Не задекларовано жодних грошових активів', critical=3)
-        get_savings_diff_by_person(prev_decl, curr_decl) # to print all those who were in previous declaration, but aren't present here
+        get_savings_diff_by_person_v2(prev_decl, curr_decl) # to print all those who were in previous declaration, but aren't present here
     else:
         report.add_record(ReportLevel.STEP, 'Грошові активи: ')
-        savings_diff_by_person_ = get_savings_diff_by_person(prev_decl, curr_decl)
-        percentage_by_person_ = get_savings_percentage_by_person(prev_decl.earnings_by_person, savings_diff_by_person_)
-        for person_, percentage_ in percentage_by_person_.items():
-            log.debug(f'Percentage of accumulated savings by person between following declarations: '
-                        f'\'{prev_decl.written_type}\' for {prev_decl.year} '
-                        f'and \'{curr_decl.written_type}\' for {curr_decl.year} : '
-                        f'\n {person_} - {percentage_}')
-            report.add_record(ReportLevel.DETAILS,
-                              f'Особа {curr_decl.get_person_name_by_id(person_)} - приріст грошових активів '
-                              f'склав близько {percentage_:.0%} від задекларованих доходів за цей рік',
-                              critical=1)
+        # code below is deprecated, rewrite if ratio for savings/income by person is needed
+        # savings_diff_by_person_ = get_savings_diff_by_person_v1(prev_decl, curr_decl)
+        # percentage_by_person_ = get_savings_percentage_by_person(prev_decl.earnings_by_person, savings_diff_by_person_)
+        # for person_, percentage_ in percentage_by_person_.items():
+        #     log.debug(f'Percentage of accumulated savings by person between following declarations: '
+        #                 f'\'{prev_decl.written_type}\' for {prev_decl.year} '
+        #                 f'and \'{curr_decl.written_type}\' for {curr_decl.year} : '
+        #                 f'\n {person_} - {percentage_}')
+        #     report.add_record(ReportLevel.DETAILS,
+        #                       f'Особа {curr_decl.get_person_name_by_id(person_)} - приріст грошових активів '
+        #                       f'склав близько {percentage_:.0%} від задекларованих доходів за цей рік',
+        #                       critical=1)
+        savings_diff_by_prsn_ = get_savings_diff_by_person_v2(prev_decl, curr_decl)
+        # TODO complete this part
+        # TODO 1st = print total
+
 
 
 # returns amount of savings (converted to UAH) that each person accumulated (or lost) since previous declaration
-def get_savings_diff_by_person(prev_decl: Declaration, curr_decl: Declaration) -> dict[str, float]:
+# should be deprecated
+def get_savings_diff_by_person_v1(prev_decl: Declaration, curr_decl: Declaration) -> dict[str, float]:
     diffs_by_person = {}
     # TODO: rewrite - calculate diff by currency for each person, and only then convert and get total
     if bool(prev_decl.savings_by_person) and bool(curr_decl.savings_by_person):
@@ -221,12 +243,39 @@ def get_savings_diff_by_person(prev_decl: Declaration, curr_decl: Declaration) -
     elif bool(curr_decl.savings_by_person):
         diffs_by_person = curr_decl.savings_by_person.copy()
     # elif bool(curr_decl.savings_by_person):
-    log.debug(f'get_savings_diff_by_person() executed, result: {diffs_by_person}')
+    log.debug(f'get_savings_diff_by_person_v1() executed, result: {diffs_by_person}')
+    return diffs_by_person
+
+
+def get_savings_diff_by_person_v2(prev_decl: Declaration, curr_decl: Declaration) -> dict[str, dict[str, str|int|float]]:
+    diffs_by_person: dict[str, dict[str, str|int|float]] = defaultdict(dict) # just create emtpy dictionary
+    if bool(prev_decl.savings_by_prsn_and_curr) and bool(curr_decl.savings_by_prsn_and_curr):
+        for person_ in (prev_decl.savings_by_prsn_and_curr.keys() & curr_decl.savings_by_prsn_and_curr.keys()):
+            # diffs_by_person[person_] = curr_decl.savings_by_person[person_] - prev_decl.savings_by_person[person_]
+            for currency_ in (curr_decl.savings_by_prsn_and_curr[person_].keys() | prev_decl.savings_by_prsn_and_curr[person_].keys()):
+                diffs_by_person[person_][currency_] = curr_decl.savings_by_prsn_and_curr[person_][currency_] - prev_decl.savings_by_prsn_and_curr[person_][currency]
+        for person_ in (curr_decl.savings_by_prsn_and_curr.keys() - prev_decl.savings_by_prsn_and_curr.keys()):
+            diffs_by_person[person_] = curr_decl.savings_by_prsn_and_curr[person_]
+        # for every person that had savings declared in previous declaration, but does not have now
+        for person_ in prev_decl.savings_by_prsn_and_curr.keys() - curr_decl.savings_by_prsn_and_curr.keys():
+            log.info((f'There are no more savings that belong to {curr_decl.persons[person_].full_name}'
+                      f' in declaration ({curr_decl.written_type}, {curr_decl.year})'))
+            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to person with ID {person_}', critical=2)
+    # if current declaration has no savings, then report every person as the one whose savings are not declared now
+    if bool(prev_decl.savings_by_prsn_and_curr):
+        for person_ in prev_decl.savings_by_prsn_and_curr.keys():
+            log.info((f'There are no more savings that belong to {curr_decl.persons[person_].full_name}'
+                      f' in declaration ({curr_decl.written_type}, {curr_decl.year})'))
+            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to person with ID {person_}', critical=2)
+    elif bool(curr_decl.savings_by_prsn_and_curr):
+        diffs_by_person = curr_decl.savings_by_prsn_and_curr.copy()
+    log.debug(f'get_savings_diff_by_person_v2() executed, result: {diffs_by_person}')
     return diffs_by_person
 
 
 # returns amount of savings (converted to UAH) accumulated overall since previous declaration
-def get_total_savings_diff(prev_decl: Declaration, curr_decl: Declaration):
+# soon to be deprecated
+def get_total_savings_diff_v1(prev_decl: Declaration, curr_decl: Declaration):
     diff = None
     for person_ in prev_decl.savings_by_person.keys() & curr_decl.savings_by_person.keys():
         diff += curr_decl.savings_by_person[person_] - prev_decl.savings_by_person[person_]
@@ -245,6 +294,7 @@ def get_total_savings_diff(prev_decl: Declaration, curr_decl: Declaration):
 
 
 # returns percentage of savings accumulated by person related to their declared earnings
+# is it deprecated?
 def get_savings_percentage_by_person(earnings_by_person: dict[str, float], savings_diff_by_person: dict[str, float]):
     ratios = {}
     for person_ in savings_diff_by_person.keys():
@@ -256,11 +306,36 @@ def get_savings_percentage_by_person(earnings_by_person: dict[str, float], savin
 
 
 # returns percentage of savings accumulated in total related to declared earnings (in one declaration)
-def get_total_savings_to_earnings_ratio(prev_decl: Declaration, curr_decl: Declaration):
-    total_savings = get_total_savings_diff(prev_decl, curr_decl)
+# soon to be deprecated
+def get_total_savings_to_earnings_ratio_v1(prev_decl: Declaration, curr_decl: Declaration):
+    total_savings = get_total_savings_diff_v1(prev_decl, curr_decl)
     total_earnings = sum(curr_decl.earnings_by_person.values())
     log.info(f'Total percentage of earnings: {(total_earnings / total_savings):.0%}')
     return total_savings / total_earnings
+
+# returns difference in savings (accumulated since last declaration) by currency
+def get_savings_diff_by_avg(prev_decl: Declaration, curr_decl: Declaration) -> dict[str, int|float]:
+    savings_diff: dict[str, int|float] = {}
+    for curr in (curr_decl.savings_by_currency.keys() - prev_decl.savings_by_currency.keys()):
+        savings_diff[curr] = curr_decl.savings_by_currency[curr] # save new currency entries as is
+    for curr in (prev_decl.savings_by_currency.keys() - curr_decl.savings_by_currency.keys()):
+        savings_diff[curr] = - prev_decl.savings_by_currency[curr] # amount for removed currencies are saved as negative
+    for curr in (prev_decl.savings_by_currency.keys() & curr_decl.savings_by_currency.keys()):
+        savings_diff[curr] = curr_decl.savings_by_currency[curr] - prev_decl.savings_by_currency[curr]
+    log.debug(f'get_savings_diff_by_avg() executed for declaration [{curr_decl.declaration_id}] '
+              f'and previous one [{prev_decl.declaration_id}], result: {savings_diff}')
+    return savings_diff
+
+
+def compare_savings_and_earnings(prev_decl: Declaration, curr_decl: Declaration):
+    if curr_decl.savings_by_currency:
+        savings_by_curr = curr_decl.savings_by_currency.copy()
+    else:
+        savings_by_curr = sum_savings_by_currency_avg(curr_decl.savings)
+        curr_decl.savings_by_currency = savings_by_curr.copy()
+    savings_diff = get_savings_diff_by_avg(prev_decl, curr_decl)
+    pass
+
 
 
 # compares changes in declared property and reports differences

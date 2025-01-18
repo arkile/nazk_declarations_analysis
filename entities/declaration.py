@@ -71,10 +71,14 @@ class Declaration:
         self.persons: dict[str, Person] = {}
         self.property_list: list[Property] = []
         self.vehicle_list: list[Vehicle] = []
-        self.savings: list[SavingsEntry] = []
+
         self.earnings: list[EarningsEntry] = []
-        self.savings_by_person: dict[str|int, int|float] = {}
         self.earnings_by_person: dict[str|int, int|float] = {}
+
+        self.savings: list[SavingsEntry] = []
+        self.savings_by_person: dict[str|int, int|float] = {}
+        self.savings_by_currency: dict[str, int|float] = {}
+        self.savings_by_prsn_and_curr: dict[str, dict[str, str|int]] = {}
     # __init__ end
 
 
