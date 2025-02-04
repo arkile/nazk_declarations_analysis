@@ -142,5 +142,5 @@ def sum_savings_by_currency_avg(savings_entries: list[SavingsEntry]) -> dict[str
     return savings_by_currency
 
 # returns total amount of converted savings (converted by yearly average for each currency)
-def get_total_converted_avg(savings_by_currency: dict[str, int|float], year: str) -> int|float:
+def get_total_converted_avg(savings_by_currency: dict[str, int|float], year: str|int) -> int|float:
     return sum( [to_uah_by_yearly_avg(curr, amount, year) for (curr, amount) in savings_by_currency.items()] )

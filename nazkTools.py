@@ -18,12 +18,14 @@ LIST_ADDRESS = 'https://public-api.nazk.gov.ua/v2/documents/list?query='
 
 DOC_ADDRESS = 'https://public-api.nazk.gov.ua/v2/documents/'
 
+REGULAR_DECL_VIEW_ADDRESS = 'https://public.nazk.gov.ua/documents/'
+
 log.basicConfig(format='{asctime} [{levelname}] {message}',
                 style='{',
                 datefmt="%H:%M", # datefmt="%Y-%m-%d %H:%M",
-                # level=log.DEBUG)
+                level=log.DEBUG)
                 # level=log.INFO)
-                level=log.WARNING)
+                # level=log.WARNING)
 
 report = reports.init_new_report()
 
@@ -126,6 +128,14 @@ def load_full_declaration(declaration) -> Declaration:
                     log.error(f'KeyException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
                               f'while loading full declaration, step 2')
                     log.exception('')
+                # add main figure to the list of related persons - to resolve references in property and savings/earnings
+                try:
+                    declaration.persons['1'] = get_self_entry(data['data']['step_1']['data'])
+                    log.debug('key figure added as a person with id: 1, relation type: self')
+                except KeyError:
+                    log.error(f'KeyException caught in declaration {declaration.declaration_id}, year: {declaration.year}, '
+                              f'while loading full declaration, step 2')
+                    log.exception('')
             if i_ == 3:  # Нерухомість
                 try:
                     declaration.property_list = get_property_entries(data['data']['step_' + str(i_)]['data'])
@@ -172,7 +182,7 @@ def load_full_declaration(declaration) -> Declaration:
 #compares two full declarations
 def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
     report.add_record(ReportLevel.TOP, f'Декларація {curr_decl.written_type} за {curr_decl.year} рік.'
-                                       f'           {DOC_ADDRESS+curr_decl.declaration_id}')
+                                       f'           {REGULAR_DECL_VIEW_ADDRESS+curr_decl.declaration_id}')
     log.debug(f'Report row added: Declaration {curr_decl.written_type}, year {curr_decl.year}')
 
     # compare property - step 3
@@ -192,6 +202,7 @@ def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
     # compare earnings - step 11
     if not bool(curr_decl.earnings_by_person):
         report.add_record(ReportLevel.STEP, 'Доходи: Не задекларовано жодних доходів', critical=3)
+        total_income_taxed = 0
     else:
         report.add_record(ReportLevel.STEP, 'Доходи: ')
         total_income = sum([entry_.amount for entry_ in curr_decl.earnings])
@@ -202,10 +213,13 @@ def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
                           f' (податки вирахувані лише із відповідних категорій доходів)')
 
     # compare savings - step 12
+    if not bool(curr_decl.savings_by_currency): # fool check
+        curr_decl.savings_by_currency = sum_savings_by_currency_avg(curr_decl.savings)
     if not bool(curr_decl.savings_by_currency):
         report.add_record(ReportLevel.STEP, 'Грошові активи: Не задекларовано жодних грошових активів', critical=3)
         get_savings_diff_by_person_v2(prev_decl, curr_decl) # to print all those who were in previous declaration, but aren't present here
     else:
+        log.debug(curr_decl.savings_by_currency)
         report.add_record(ReportLevel.STEP, 'Грошові активи: ')
         # code below is deprecated, rewrite if ratio for savings/income by person is needed
         # savings_diff_by_person_ = get_savings_diff_by_person_v1(prev_decl, curr_decl)
@@ -219,9 +233,27 @@ def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
         #                       f'Особа {curr_decl.get_person_name_by_id(person_)} - приріст грошових активів '
         #                       f'склав близько {percentage_:.0%} від задекларованих доходів за цей рік',
         #                       critical=1)
-        savings_diff_by_prsn_ = get_savings_diff_by_person_v2(prev_decl, curr_decl)
-        # TODO complete this part
-        # TODO 1st = print total
+
+        # to print all those who were in previous declaration, but aren't present here
+        # without using returned value
+        get_savings_diff_by_person_v2(prev_decl, curr_decl)
+
+        report.add_record(ReportLevel.DETAILS, f'Загальний стан задекларованих рахунків: {curr_decl.savings_by_currency}')
+        savings_diff = get_savings_diff_by_avg(prev_decl,curr_decl)
+        diff_total = get_total_converted_avg(savings_diff, curr_decl.year)
+        if diff_total != 0: # if there were any changes
+            report.add_record(ReportLevel.DETAILS, f'Зміни з попередньої декларації: {savings_diff}')
+            sign_ = '+' if diff_total >= 0 else '-'
+            report.add_record(ReportLevel.DETAILS, f'Сума змін на всіх грошових рахунках (у гривневому еквіваленті, за середньорічним курсом): {sign_}{diff_total}')
+            # TODO add total diff in range
+            if total_income_taxed and total_income_taxed != 0:
+                ratio_avg = diff_total / total_income_taxed
+                report.add_record(ReportLevel.DETAILS, f'Сума змін на всіх грошових рахунках склала близько {ratio_avg:.0%} від задекларованих доходів (після вирахування податків)')
+            elif diff_total > 0:
+                report.add_record(ReportLevel.DETAILS, f'Сума змін на рахунках склала {sign_}{diff_total}, але жодних доходів не було задекларовано', critical=3)
+        else:
+            report.add_record(ReportLevel.DETAILS, f'Змін у задекларованих рахунках не зафіксовано (перерозподіл коштів між членами родини ігнорується)')
+        # TODO complete this part (what is there to complete, past me? I forgot)
 
 
 
@@ -239,7 +271,7 @@ def get_savings_diff_by_person_v1(prev_decl: Declaration, curr_decl: Declaration
         for person_ in prev_decl.savings_by_person.keys() - curr_decl.savings_by_person.keys():
             log.info((f'There are no more savings that belong to {curr_decl.persons[person_].full_name}'
                       f' in declaration ({curr_decl.written_type}, {curr_decl.year})'))
-            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to person with ID {person_}', critical=2)
+            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to a person with ID {person_}', critical=2)
     elif bool(curr_decl.savings_by_person):
         diffs_by_person = curr_decl.savings_by_person.copy()
     # elif bool(curr_decl.savings_by_person):
@@ -253,20 +285,28 @@ def get_savings_diff_by_person_v2(prev_decl: Declaration, curr_decl: Declaration
         for person_ in (prev_decl.savings_by_prsn_and_curr.keys() & curr_decl.savings_by_prsn_and_curr.keys()):
             # diffs_by_person[person_] = curr_decl.savings_by_person[person_] - prev_decl.savings_by_person[person_]
             for currency_ in (curr_decl.savings_by_prsn_and_curr[person_].keys() | prev_decl.savings_by_prsn_and_curr[person_].keys()):
-                diffs_by_person[person_][currency_] = curr_decl.savings_by_prsn_and_curr[person_][currency_] - prev_decl.savings_by_prsn_and_curr[person_][currency]
+                if currency_ not in prev_decl.savings_by_prsn_and_curr[person_].keys():
+                    diffs_by_person[person_][currency_] = curr_decl.savings_by_prsn_and_curr[person_][currency_]
+                elif currency_ not in curr_decl.savings_by_prsn_and_curr[person_].keys():
+                    diffs_by_person[person_][currency_] = - prev_decl.savings_by_prsn_and_curr[person_][currency_] # hope it works like I want it to
+                else:
+                    diffs_by_person[person_][currency_] = curr_decl.savings_by_prsn_and_curr[person_][currency_] - prev_decl.savings_by_prsn_and_curr[person_][currency_]
         for person_ in (curr_decl.savings_by_prsn_and_curr.keys() - prev_decl.savings_by_prsn_and_curr.keys()):
             diffs_by_person[person_] = curr_decl.savings_by_prsn_and_curr[person_]
         # for every person that had savings declared in previous declaration, but does not have now
         for person_ in prev_decl.savings_by_prsn_and_curr.keys() - curr_decl.savings_by_prsn_and_curr.keys():
-            log.info((f'There are no more savings that belong to {curr_decl.persons[person_].full_name}'
+            log.debug(f'no more person savings. previous list: {prev_decl.savings_by_prsn_and_curr.keys()}')
+            log.debug(f'no more person savings. current list: {curr_decl.savings_by_prsn_and_curr.keys()}')
+            log.debug(f'no more person savings. person id: {person_}')
+            log.info((f'There are no more savings that belong to a person with ID {person_}'
                       f' in declaration ({curr_decl.written_type}, {curr_decl.year})'))
-            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to person with ID {person_}', critical=2)
+            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to {curr_decl.persons[person_].full_name} ({curr_decl.persons[person_].relation_type})', critical=2)
     # if current declaration has no savings, then report every person as the one whose savings are not declared now
-    if bool(prev_decl.savings_by_prsn_and_curr):
+    elif bool(prev_decl.savings_by_prsn_and_curr):
         for person_ in prev_decl.savings_by_prsn_and_curr.keys():
-            log.info((f'There are no more savings that belong to {curr_decl.persons[person_].full_name}'
+            log.info((f'There are no more savings that belong to a person with ID {person_}'
                       f' in declaration ({curr_decl.written_type}, {curr_decl.year})'))
-            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to person with ID {person_}', critical=2)
+            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to {curr_decl.persons[person_].full_name} ({curr_decl.persons[person_].relation_type})', critical=2)
     elif bool(curr_decl.savings_by_prsn_and_curr):
         diffs_by_person = curr_decl.savings_by_prsn_and_curr.copy()
     log.debug(f'get_savings_diff_by_person_v2() executed, result: {diffs_by_person}')
@@ -327,6 +367,7 @@ def get_savings_diff_by_avg(prev_decl: Declaration, curr_decl: Declaration) -> d
     return savings_diff
 
 
+# TODO complete  (is it needed?)
 def compare_savings_and_earnings(prev_decl: Declaration, curr_decl: Declaration):
     if curr_decl.savings_by_currency:
         savings_by_curr = curr_decl.savings_by_currency.copy()
@@ -334,6 +375,10 @@ def compare_savings_and_earnings(prev_decl: Declaration, curr_decl: Declaration)
         savings_by_curr = sum_savings_by_currency_avg(curr_decl.savings)
         curr_decl.savings_by_currency = savings_by_curr.copy()
     savings_diff = get_savings_diff_by_avg(prev_decl, curr_decl)
+
+    # if this one is going to contain all of the code for step_12 for run_comparison, then it should be like that:
+    # 1. show overall difference in savings
+    # 2. show overall ratio savings / income (taxed)
     pass
 
 
