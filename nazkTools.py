@@ -481,14 +481,16 @@ def check_person(full_name, declarant_id = 0):
     for i_ in range(1, len(major_declarations)):
         # print(major_declarations[i_])
         run_comparison(major_declarations[i_-1], major_declarations[i_])
-        report.add_empty_line()
-    print(report)
+        # report.add_empty_line()
+    # print(report)
+    return report
 
 
 
 if __name__ == '__main__':
     # name = ' прокоф’єв олександр іванович '
     name = 'Андріяш Микола Михайлович'
-    check_person(name)
-
+    person_report = check_person(name)
+    print(person_report)
+    person_report.print_to_docx()
 

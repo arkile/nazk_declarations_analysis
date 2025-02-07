@@ -1,1 +1,1 @@
-from reports.report import ReportLevel, init_new_report
+from reports.general_report import ReportLevel, init_new_report

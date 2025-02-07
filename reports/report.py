@@ -42,6 +42,12 @@ class Report(object):
     def add_empty_line(self):
         self.text += '\n'
 
+    def print_to_file(self, filename: str, ext='.docx'):
+        if not ext.startswith('.'):
+            ext = '.' + ext
+        with open(filename + ext, 'w') as f:
+            print(self.text, file=f)
+
     def __str__(self):
         return self.text
 
