@@ -23,9 +23,9 @@ REGULAR_DECL_VIEW_ADDRESS = 'https://public.nazk.gov.ua/documents/'
 log.basicConfig(format='{asctime} [{levelname}] {message}',
                 style='{',
                 datefmt="%H:%M", # datefmt="%Y-%m-%d %H:%M",
-                level=log.DEBUG)
+                # level=log.DEBUG)
                 # level=log.INFO)
-                # level=log.WARNING)
+                level=log.WARNING)
 
 report = reports.init_new_report()
 
@@ -71,6 +71,7 @@ def get_all_declarations_by_name(full_name) -> dict[str, object]:
     return data
 
 
+# parse response (from query for all declarations for specified name) to a list of Declaration objects
 def parse_declaration_cards(data) -> list[Declaration]:
     declarations = []
     for item in data['data']:
@@ -82,6 +83,22 @@ def parse_declaration_cards(data) -> list[Declaration]:
         # print(str(declaration))
     # returns list of Declaration objects
     return declarations
+
+
+# checks if there are different people with the same full names in the list of declarations returned by api query
+def check_for_namesakes(declarations: list[Declaration]) -> bool:
+    id_: int = 0
+    for d_ in declarations:
+        if not id_:
+            id_ = d_.declarant_id
+        elif d_.declarant_id != id_:
+            return False
+    return True
+
+
+# filters out all people with different declara
+def filter_namesakes_for_id(declarations: list[Declaration], declarant_id: int) -> list[Declaration]:
+    return [decl for decl in declarations if decl.declarant_id == declarant_id]
 
 
 # loads full info about declaration from respective page
@@ -435,15 +452,24 @@ def compare_vehicle_list(prev_decl: Declaration, curr_decl: Declaration):
 
 # ----------------------------
 
-def check_person(full_name):
+def check_person(full_name, declarant_id = 0):
     global report
     report = reports.init_new_report()
     declarations_json = get_all_declarations_by_name(full_name)
     declarations_list = parse_declaration_cards(declarations_json)
 
+    # fail if there are namesakes - need to run again with declarant_id specified TODO rewrite this part
+    if not check_for_namesakes(declarations_list):
+        report.add_record(ReportLevel.TOP, 'Знайдено декілька осіб з однаковим повним ім\'ям, але різними ID. Перезапустіть зі вказаним declarant_id')
+        raise BaseException # expand on this
+    if declarant_id:
+        declarations_list = filter_namesakes_for_id(declarations_list, declarant_id)
+
     major_declarations = get_sorted_major_declarations(declarations_list)
+    # removes all declarations that were corrected later
     major_declarations = remove_incorrect_declarations(major_declarations)
     # print(major_declarations)
+    # мінорні - це про суттєві зміни у майновому стані
     minor_declarations = get_sorted_minor_declarations(declarations_list)
 
     year_range = (major_declarations[0].year, major_declarations[-1].year)
