@@ -36,7 +36,7 @@ class Vehicle:
         if len(change) != 0:  # or simply if(change) ?
             change = f'{self.__repr__()}:' + change
         else:
-            change = f'Змін не виявлено:   {self.__repr__()}'
+            change = f'Змін не виявлено:\n   {self.__repr__()}'
         return change
 
     def __eq__(self, other):

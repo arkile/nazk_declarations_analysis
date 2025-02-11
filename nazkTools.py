@@ -198,46 +198,47 @@ def load_full_declaration(declaration) -> Declaration:
 # --- Comparison functions ---
 #compares two full declarations
 def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
-    report.add_record(ReportLevel.TOP, f'Декларація {curr_decl.written_type} за {curr_decl.year} рік.'
-                                       f'           {REGULAR_DECL_VIEW_ADDRESS+curr_decl.declaration_id}')
+    report.add_record(ReportLevel.TOP,
+                      f'Декларація {curr_decl.written_type} за {curr_decl.year} рік.',
+                      hyperlink=f'{REGULAR_DECL_VIEW_ADDRESS+curr_decl.declaration_id}')
     log.debug(f'Report row added: Declaration {curr_decl.written_type}, year {curr_decl.year}')
 
     # compare property - step 3
+    report.add_record(ReportLevel.STEP, 'Нерухомість: ')
     if not bool(curr_decl.property_list):
-        report.add_record(ReportLevel.STEP, 'Нерухомість:   Не задекларовано жодного об\'єкта нерухомості')
-    else:
-        report.add_record(ReportLevel.STEP, 'Нерухомість: ')
+        report.add_record(ReportLevel.SUBSTEP, 'Не задекларовано жодного об\'єкта нерухомості', critical=2)
     compare_property_list(prev_decl, curr_decl) # if curr is emtpy, reports removed if any
 
     # compare cars - step 6
+    report.add_record(ReportLevel.STEP, 'Рухоме майно (транспортні засоби): ')
     if not bool(curr_decl.vehicle_list):
-        report.add_record(ReportLevel.STEP, 'Рухоме майно (транспортні засоби) - не задекларовано')
-    else:
-        report.add_record(ReportLevel.STEP, 'Рухоме майно: ')
+        report.add_record(ReportLevel.SUBSTEP, 'Не задекларовано жодного об\'єкта рухомого майна')
     compare_vehicle_list(prev_decl, curr_decl) # should it be here or in the else block above?
 
     # compare earnings - step 11
+    report.add_record(ReportLevel.STEP, 'Доходи: ')
     if not bool(curr_decl.earnings_by_person):
-        report.add_record(ReportLevel.STEP, 'Доходи: Не задекларовано жодних доходів', critical=3)
+        report.add_record(ReportLevel.SUBSTEP, 'Не задекларовано жодних доходів', critical=3)
         total_income_taxed = 0
     else:
-        report.add_record(ReportLevel.STEP, 'Доходи: ')
         total_income = sum([entry_.amount for entry_ in curr_decl.earnings])
-        report.add_record(ReportLevel.DETAILS, f'Загальний задекларований дохід: {total_income}')
+        report.add_record(ReportLevel.SUBSTEP, f'Загальний задекларований дохід:')
+        report.add_record(ReportLevel.DETAILS, f' {total_income} грн')
         total_income_taxed = sum([entry_.amount_taxed for entry_ in curr_decl.earnings])
-        report.add_record(ReportLevel.DETAILS,
-                          f'Загальний задекларований дохід після вирахування податків: {total_income_taxed}  '
-                          f' (податки вирахувані лише із відповідних категорій доходів)')
+        report.add_record(ReportLevel.SUBSTEP,
+                          f'Загальний задекларований дохід після вирахування податків '
+                          f'(податки вирахувані лише із відповідних категорій доходів): ')
+        report.add_record(ReportLevel.DETAILS, f' {total_income_taxed} грн')
 
     # compare savings - step 12
     if not bool(curr_decl.savings_by_currency): # fool check
         curr_decl.savings_by_currency = sum_savings_by_currency_avg(curr_decl.savings)
+    report.add_record(ReportLevel.STEP, 'Грошові активи: ')
     if not bool(curr_decl.savings_by_currency):
-        report.add_record(ReportLevel.STEP, 'Грошові активи: Не задекларовано жодних грошових активів', critical=3)
+        report.add_record(ReportLevel.SUBSTEP, 'Не задекларовано жодних грошових активів', critical=3)
         get_savings_diff_by_person_v2(prev_decl, curr_decl) # to print all those who were in previous declaration, but aren't present here
     else:
         log.debug(curr_decl.savings_by_currency)
-        report.add_record(ReportLevel.STEP, 'Грошові активи: ')
         # code below is deprecated, rewrite if ratio for savings/income by person is needed
         # savings_diff_by_person_ = get_savings_diff_by_person_v1(prev_decl, curr_decl)
         # percentage_by_person_ = get_savings_percentage_by_person(prev_decl.earnings_by_person, savings_diff_by_person_)
@@ -246,7 +247,7 @@ def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
         #                 f'\'{prev_decl.written_type}\' for {prev_decl.year} '
         #                 f'and \'{curr_decl.written_type}\' for {curr_decl.year} : '
         #                 f'\n {person_} - {percentage_}')
-        #     report.add_record(ReportLevel.DETAILS,
+        #     report.add_record(ReportLevel.SUBSTEP,
         #                       f'Особа {curr_decl.get_person_name_by_id(person_)} - приріст грошових активів '
         #                       f'склав близько {percentage_:.0%} від задекларованих доходів за цей рік',
         #                       critical=1)
@@ -255,21 +256,28 @@ def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
         # without using returned value
         get_savings_diff_by_person_v2(prev_decl, curr_decl)
 
-        report.add_record(ReportLevel.DETAILS, f'Загальний стан задекларованих рахунків: {curr_decl.savings_by_currency}')
+        report.add_record(ReportLevel.SUBSTEP, f'Загальний стан задекларованих рахунків: ')
+        report.add_record(
+            ReportLevel.DETAILS,
+            ';  '.join("{}: {}".format(k, v) for k, v in dict(sorted(curr_decl.savings_by_currency.items())).items()))
         savings_diff = get_savings_diff_by_avg(prev_decl,curr_decl)
         diff_total = get_total_converted_avg(savings_diff, curr_decl.year)
         if diff_total != 0: # if there were any changes
-            report.add_record(ReportLevel.DETAILS, f'Зміни з попередньої декларації: {savings_diff}')
+            report.add_record(ReportLevel.SUBSTEP, f'Зміни з попередньої декларації: ')
+            report.add_record(
+                ReportLevel.DETAILS,
+                ';  '.join("{}: {}".format(k, v) for k, v in dict(sorted(savings_diff.items())).items()))
             sign_ = '+' if diff_total >= 0 else '-'
-            report.add_record(ReportLevel.DETAILS, f'Сума змін на всіх грошових рахунках (у гривневому еквіваленті, за середньорічним курсом): {sign_}{diff_total}')
+            report.add_record(ReportLevel.SUBSTEP, f'Сума змін на всіх грошових рахунках (у гривневому еквіваленті, за середньорічним курсом): ')
+            report.add_record(ReportLevel.DETAILS, f' {sign_}{diff_total} ')
             # TODO add total diff in range
             if total_income_taxed and total_income_taxed != 0:
                 ratio_avg = diff_total / total_income_taxed
-                report.add_record(ReportLevel.DETAILS, f'Сума змін на всіх грошових рахунках склала близько {ratio_avg:.0%} від задекларованих доходів (після вирахування податків)')
+                report.add_record(ReportLevel.SUBSTEP, f'Сума змін на всіх грошових рахунках склала близько {ratio_avg:.0%} від задекларованих доходів (після вирахування податків)')
             elif diff_total > 0:
-                report.add_record(ReportLevel.DETAILS, f'Сума змін на рахунках склала {sign_}{diff_total}, але жодних доходів не було задекларовано', critical=3)
+                report.add_record(ReportLevel.SUBSTEP, f'Сума змін на рахунках склала {sign_}{diff_total}, але жодних доходів не було задекларовано', critical=3)
         else:
-            report.add_record(ReportLevel.DETAILS, f'Змін у задекларованих рахунках не зафіксовано (перерозподіл коштів між членами родини ігнорується)')
+            report.add_record(ReportLevel.SUBSTEP, f'Змін у задекларованих рахунках не зафіксовано (перерозподіл коштів між членами родини ігнорується)')
         # TODO complete this part (what is there to complete, past me? I forgot)
 
 
@@ -288,7 +296,7 @@ def get_savings_diff_by_person_v1(prev_decl: Declaration, curr_decl: Declaration
         for person_ in prev_decl.savings_by_person.keys() - curr_decl.savings_by_person.keys():
             log.info((f'There are no more savings that belong to {curr_decl.persons[person_].full_name}'
                       f' in declaration ({curr_decl.written_type}, {curr_decl.year})'))
-            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to a person with ID {person_}', critical=2)
+            report.add_record(ReportLevel.SUBSTEP, f'There are no more savings that belong to a person with ID {person_}', critical=2)
     elif bool(curr_decl.savings_by_person):
         diffs_by_person = curr_decl.savings_by_person.copy()
     # elif bool(curr_decl.savings_by_person):
@@ -317,13 +325,13 @@ def get_savings_diff_by_person_v2(prev_decl: Declaration, curr_decl: Declaration
             log.debug(f'no more person savings. person id: {person_}')
             log.info((f'There are no more savings that belong to a person with ID {person_}'
                       f' in declaration ({curr_decl.written_type}, {curr_decl.year})'))
-            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to {curr_decl.persons[person_].full_name} ({curr_decl.persons[person_].relation_type})', critical=2)
+            report.add_record(ReportLevel.SUBSTEP, f'There are no more savings that belong to {curr_decl.persons[person_].full_name} ({curr_decl.persons[person_].relation_type})', critical=2)
     # if current declaration has no savings, then report every person as the one whose savings are not declared now
     elif bool(prev_decl.savings_by_prsn_and_curr):
         for person_ in prev_decl.savings_by_prsn_and_curr.keys():
             log.info((f'There are no more savings that belong to a person with ID {person_}'
                       f' in declaration ({curr_decl.written_type}, {curr_decl.year})'))
-            report.add_record(ReportLevel.DETAILS, f'There are no more savings that belong to {curr_decl.persons[person_].full_name} ({curr_decl.persons[person_].relation_type})', critical=2)
+            report.add_record(ReportLevel.SUBSTEP, f'There are no more savings that belong to {curr_decl.persons[person_].full_name} ({curr_decl.persons[person_].relation_type})', critical=2)
     elif bool(curr_decl.savings_by_prsn_and_curr):
         diffs_by_person = curr_decl.savings_by_prsn_and_curr.copy()
     log.debug(f'get_savings_diff_by_person_v2() executed, result: {diffs_by_person}')
@@ -406,49 +414,54 @@ def compare_property_list(prev_decl: Declaration, curr_decl: Declaration):
     added_ = [prop for prop in curr_decl.property_list if prop not in prev_decl.property_list]
     for prop in removed_:
         log.debug(f'Removed property: {prop}')
-        report.add_record(ReportLevel.DETAILS, f'Видалено нерухомість: {prop}')
+        report.add_record(ReportLevel.SUBSTEP, f'Видалено нерухомість: ')
+        report.add_record(ReportLevel.DETAILS, f' {prop} ')
     for prop in added_:
         log.debug(f'Added property: {prop}')
-        report.add_record(ReportLevel.DETAILS, f'Додано нерухомість: {prop}')
+        report.add_record(ReportLevel.SUBSTEP, f'Додано нерухомість: ')
+        report.add_record(ReportLevel.DETAILS, f' {prop} ')
         # if str(curr_decl.year) in prop.acquire_date or :
-        #     report.add_record(ReportLevel.DETAILS, f'')
+        #     report.add_record(ReportLevel.SUBSTEP, f'')
     for prop in curr_decl.property_list:
         for old_prop in prev_decl.property_list:
             if prop == old_prop:
                 change_ = prop.get_changes_since(old_prop)
                 if change_:
                     log.debug(f'Property change computed, concatenated outcome: {change_}')
-                    report.add_record(ReportLevel.DETAILS, change_)
+                    report.add_record(ReportLevel.SUBSTEP, change_)
         if prop.get_year_acquired() >= (curr_decl.year-2): # check recent purchases/acquisitions
             if not prop.cost:
                 log.debug(f'Property price not declared, but acquisition date is recent for property: {prop}')
-                report.add_record(ReportLevel.DETAILS, f'Власність набута нещодавно, проте вартість не вказана: {prop}')
+                report.add_record(ReportLevel.SUBSTEP, f'Власність набута нещодавно, проте вартість не вказана: ')
+                report.add_record(ReportLevel.DETAILS, f' {prop} ')
             elif not str(prop.cost).isdigit() and 'родич' in prop.cost.lower():
                 log.debug(f'Property price not declared by a relative, but acquisition date is recent for property: {prop}')
-                report.add_record(ReportLevel.DETAILS, f'Власність набута родичами нещодавно, проте родичі не надали інформацію про ціну: {prop}')
-
+                report.add_record(ReportLevel.SUBSTEP, f'Власність набута родичами нещодавно, проте родичі не надали інформацію про ціну: ')
+                report.add_record(ReportLevel.DETAILS, f' {prop} ')
 
 def compare_vehicle_list(prev_decl: Declaration, curr_decl: Declaration):
     added_ = [vehicle for vehicle in curr_decl.vehicle_list if vehicle not in prev_decl.vehicle_list]
     removed_ = [vehicle for vehicle in prev_decl.vehicle_list if vehicle not in curr_decl.vehicle_list]
     for vehicle in removed_:
         log.debug(f'Removed vehicle: {vehicle}')
-        report.add_record(ReportLevel.DETAILS, f'Видалено нерухоме майно (транспортний засіб): {vehicle}')
+        report.add_record(ReportLevel.SUBSTEP, f'Видалено нерухоме майно (транспортний засіб): ')
+        report.add_record(ReportLevel.DETAILS, f' {vehicle} ')
     for vehicle in added_:
         log.debug(f'Added vehicle: {vehicle}')
-        report.add_record(ReportLevel.DETAILS, f'Додано нерухоме майно (транспортний засіб): {vehicle}')
+        report.add_record(ReportLevel.SUBSTEP, f'Додано нерухоме майно (транспортний засіб): ')
+        report.add_record(ReportLevel.DETAILS, f' {vehicle} ')
     for vehicle in curr_decl.vehicle_list:
         for old_vehicle in prev_decl.vehicle_list:
             if vehicle == old_vehicle:
                 change_ = vehicle.get_changes_since(old_vehicle)
                 if change_:
                     log.debug(f'Changes in vehicle list computed, concatenated outcome: {change_}')
-                    report.add_record(ReportLevel.DETAILS, change_)
+                    report.add_record(ReportLevel.SUBSTEP, change_)
         if vehicle.get_acquire_year() >= (curr_decl.year - 2) and (not vehicle.cost or not str(vehicle.cost).isdecimal()):
             log.debug(f'Vehicle price not declared, but acquisition date is recent for property: {vehicle}')
-            report.add_record(ReportLevel.DETAILS,
+            report.add_record(ReportLevel.SUBSTEP,
                         f'Рухоме майно (транспортний засіб) набуте нещодавно, проте вартість не вказана: {vehicle}')
-
+            report.add_record(ReportLevel.DETAILS, f' {vehicle} ')
 
 # ----------------------------
 

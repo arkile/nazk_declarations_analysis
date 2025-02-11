@@ -30,9 +30,9 @@ class Property:
             change += f'\n  - вартість змінилась із {other.cost} грн на {self.cost} грн.'
 
         if len(change) != 0:  # or simply if(change) ?
-            change = f'Змінені дані:      {self.__repr__()}:' + change
+            change = f'Змінені дані:\n      {self.__repr__()}:' + change
         else:
-            change = f'Змін не виявлено:   {self.__repr__()}'
+            change = f'Змін не виявлено:\n   {self.__repr__()}'
         return change
 
     def get_year_acquired(self):
