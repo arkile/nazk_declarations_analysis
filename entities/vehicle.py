@@ -45,8 +45,12 @@ class Vehicle:
                 and self.manufacture_year == other.manufacture_year )
 
     def __str__(self):
+        if self.cost:
+            price_str = f'{self.cost} грн'
+        else:
+            price_str = 'не вказано'
         return (f'Транспортний засіб {self.brand} {self.model}, {self.manufacture_year} року випуску. '
-                f'Дата набуття: {self.acquire_date}, задекларована вартість: {self.cost} грн')
+                f'Дата набуття: {self.acquire_date}, задекларована вартість: {price_str}')
 
     def __repr__(self):
         return self.__str__()
@@ -58,7 +62,8 @@ def _parse_cost(cost_: str) -> int | str:
             or cost_ == '[Не застосовується]'
             or cost_ == '[Не відомо]'
             or cost_ == 'Не вказано'
-            or cost_ == '[Не вказано]'):
+            or cost_ == '[Не вказано]'
+            or cost_ == '[Член сім\'ї не надав інформацію]'):
         return ''
     elif cost_.isdecimal():
         return int(cost_)
@@ -84,7 +89,7 @@ def get_vehicle_entries(step6_data: list[dict]) -> list[Vehicle]:
         if 'власність' in ownership_type.lower():
             owners = {}
             for item in entry_['rights']:
-                if len(item.keys()) == 2 and 'ownershipType' in item and 'rightBelongs' in item:
+                if len(entry_['rights']) == 1 and 'ownershipType' in item and 'rightBelongs' in item:
                     owners[item['rightBelongs']] = '100'
                 else:
                     raise BaseException(f'ownership is shared in step_6 for step6_data entry {entry_}')

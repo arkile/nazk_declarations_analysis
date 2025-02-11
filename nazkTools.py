@@ -25,7 +25,8 @@ log.basicConfig(format='{asctime} [{levelname}] {message}',
                 datefmt="%H:%M", # datefmt="%Y-%m-%d %H:%M",
                 # level=log.DEBUG)
                 # level=log.INFO)
-                level=log.WARNING)
+                # level=log.WARNING)
+                level=log.ERROR)
 
 report = reports.init_new_report()
 
@@ -122,7 +123,7 @@ def load_full_declaration(declaration) -> Declaration:
             log.info(f'Step {i_} missed, isNotApplicable is true for this step')
             if i_ == 2:
                 log.warning(f'No persons found in declaration {declaration.declaration_id}')
-                report.add_record(ReportLevel.STEP, 'No family members declared in this declaration')
+                # report.add_record(ReportLevel.STEP, 'No family members declared in this declaration')
             if i_ == 3:
                 log.warning(f'No real estate property found in declaration {declaration.declaration_id}')
             if i_ == 6:
@@ -203,6 +204,11 @@ def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
                       hyperlink=f'{REGULAR_DECL_VIEW_ADDRESS+curr_decl.declaration_id}')
     log.debug(f'Report row added: Declaration {curr_decl.written_type}, year {curr_decl.year}')
 
+    # TODO rewrite every report entry and output - add checks for declaration being first to report
+    if prev_decl == curr_decl:
+        report.add_record(ReportLevel.STEP,
+                          f'Перша декларація - ігноруйте повідомлення про зміни, буде виправлено у наступних версіях')
+
     # compare property - step 3
     report.add_record(ReportLevel.STEP, 'Нерухомість: ')
     if not bool(curr_decl.property_list):
@@ -267,7 +273,7 @@ def run_comparison(prev_decl: Declaration, curr_decl: Declaration):
             report.add_record(
                 ReportLevel.DETAILS,
                 ';  '.join("{}: {}".format(k, v) for k, v in dict(sorted(savings_diff.items())).items()))
-            sign_ = '+' if diff_total >= 0 else '-'
+            sign_ = '+' if diff_total >= 0 else ''
             report.add_record(ReportLevel.SUBSTEP, f'Сума змін на всіх грошових рахунках (у гривневому еквіваленті, за середньорічним курсом): ')
             report.add_record(ReportLevel.DETAILS, f' {sign_}{diff_total} ')
             # TODO add total diff in range
@@ -485,12 +491,20 @@ def check_person(full_name, declarant_id = 0):
     # мінорні - це про суттєві зміни у майновому стані
     minor_declarations = get_sorted_minor_declarations(declarations_list)
 
-    year_range = (major_declarations[0].year, major_declarations[-1].year)
+    if len(major_declarations) > 1:
+        year_range = (major_declarations[0].year, major_declarations[-1].year)
+    elif len(major_declarations) == 0:
+        report.add_top_info(full_name, (0, 0))
+        report.add_record(ReportLevel.TOP, 'Декларацій не знайдено', critical=3)
+        return report
+    else:
+        year_range = (major_declarations[0].year, major_declarations[0].year)
     report.add_top_info(full_name, year_range)
 
     for decl in major_declarations:
         load_full_declaration(decl)
 
+    run_comparison(major_declarations[0], major_declarations[0]) #to report very first declaration
     for i_ in range(1, len(major_declarations)):
         # print(major_declarations[i_])
         run_comparison(major_declarations[i_-1], major_declarations[i_])
@@ -499,11 +513,45 @@ def check_person(full_name, declarant_id = 0):
     return report
 
 
+# -------------------------
 
-if __name__ == '__main__':
-    # name = ' прокоф’єв олександр іванович '
-    name = 'Андріяш Микола Михайлович'
+def run_for_one():
+    name = 'НЕБИЛИЦЯ Ольга Дмитрівна'
     person_report = check_person(name)
-    print(person_report)
+    # print(person_report)
     person_report.print_to_docx()
 
+
+def run_namelist():
+    name_list = [
+        'МОРДАЧ Віктор Олексійович',
+        'АГУТІН Михайло Миколайович',
+        'МІРОШНИК Тетяна Тихонівна',
+        'БАШЛАК Микола Миколайович',
+        'РАХУБОВСЬКИЙ Сергій Валентинович',
+        'НЕБИЛИЦЯ Ольга Дмитрівна',
+        # 'СТРІЛЬЧУК Петро',
+        'Кривовʼяз Андрій Тихонович',
+        'ЧУЯШЕНКО Ігор Геннадійович',
+        'БАБІЦЬКИЙ Петро Олександрович',
+        'ДОДАТКО Світлана Андріївна',
+        'ПОГОРЄЛОВ Сергій Семенович',
+        'МИХАНЧУК Валентина Володимирівна'
+    ]
+    err_list = []
+    for name_ in name_list:
+        try:
+            rep = check_person(name_)
+            print(f'{name_} checked')
+            rep.print_to_docx()
+            print(f'{name_} report printed to docx')
+        except Exception as err:
+            err_list.append(name_)
+            print(f'Could not process declarations for {name_}')
+            print(f"Unexpected {err=}, {type(err)=}")
+    print(f'Not processed: {err_list}')
+
+
+if __name__ == '__main__':
+    # run_for_one()
+    run_namelist()

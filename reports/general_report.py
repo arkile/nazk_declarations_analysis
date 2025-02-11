@@ -64,6 +64,7 @@ class GeneralReport(object):
         for entry in self.entry_list:
             match entry.level:
                 case ReportLevel.TOP:
+                    doc.add_paragraph('')
                     # step = doc.add_heading(entry.text, level=3)
                     step = doc.add_heading(level=3)
                     run = step.add_run(entry.text)
@@ -71,6 +72,8 @@ class GeneralReport(object):
                     if entry.hyperlink is not None:
                         # run.add_hyperlink(entry.hyperlink)
                         add_hyperlink_into_run(step, run, entry.hyperlink)
+                    if entry.criticality == 3:
+                        run.font.color.rgb = RGBColor(255, 0, 0)
                 case ReportLevel.STEP:
                     paragraph = doc.add_heading(level=5)
                     paragraph.add_run(entry.text).bold = True

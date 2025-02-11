@@ -49,11 +49,17 @@ class Property:
                 and self.acquire_date == other.acquire_date)
 
     def __str__(self):
-        return f"Власність '{self.property_type}' (набута: {self.acquire_date}, загальна площа: {self.total_area} кв.м., ціна: {self.cost} грн)"
+        if self.cost:
+            price_str = f'{self.cost} грн'
+        else:
+            price_str = 'не вказано'
+        return (f"Власність '{self.property_type}' "
+                f"(набута: {self.acquire_date}, "
+                f"загальна площа: {self.total_area} кв.м., "
+                f'ціна: {price_str}')
 
     def __repr__(self):
-        return f"Власність '{self.property_type}' (набута: {self.acquire_date}, загальна площа: {self.total_area} кв.м., ціна: {self.cost} грн)"
-
+        return self.__str__()
 
 # -------- Tools ----------
 
@@ -64,7 +70,9 @@ def _parse_cost_assessment(cost_assessment: str) -> int | str:
             or cost_assessment == 'Не вказано'
             or cost_assessment == '[Не вказано]'):
         return ''
-    elif cost_assessment == 'Родич не надав інформацію' or 'Родич' in cost_assessment:
+    elif (cost_assessment == 'Родич не надав інформацію'
+          or 'Родич' in cost_assessment
+          or 'Член сім' in cost_assessment):
         return cost_assessment
     elif cost_assessment.isdigit():
         return int(cost_assessment)
@@ -92,8 +100,11 @@ def get_property_entries(step3_data: list[dict]) -> list[Property]:
                     owners[item['rightBelongs']] = item['percent-ownership']
                 elif 'percentownership' in item:
                     owners[item['rightBelongs']] = item['percentownership']
-                elif len(item.keys()) == 2 and 'ownershipType' in item and 'rightBelongs' in item:
-                    owners[item['rightBelongs']] = '100'
+                elif 'ownershipType' in item and 'rightBelongs' in item:
+                    if len(entry_['rights']) == 1 or len(item.keys()) == 2:
+                        owners[item['rightBelongs']] = '100'
+                    elif len(entry_['rights']) > 1:
+                        owners[item['rightBelongs']] = 'неможливо визначити'
                 else:
                     raise BaseException(f'ownership percentage is absent in step_3 for step3_data entry {entry_}')
         else:

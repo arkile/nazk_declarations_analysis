@@ -25,14 +25,20 @@ def get_earnings_entries(step11_data: list[dict]) -> list[EarningsEntry]:
     earnings_entries = []
     for entry_ in step11_data:
         e_ = None
+        # WA for [Член сім'ї не надав інформацію] in declared earnings entries
+        try:
+            amount_ = float(entry_['sizeIncome'])
+        except ValueError:
+            amount_ = 0.0
+
         if 'rights' in entry_:
             if len(entry_['rights']) > 1:
                 log.warning('Some strange shit with rights field for savings entry')
-            e_= EarningsEntry(entry_['sizeIncome'], entry_['rights'][0]['rightBelongs'], entry_['objectType'])
+            e_= EarningsEntry(amount_, entry_['rights'][0]['rightBelongs'], entry_['objectType'])
         elif 'person_who_care' in entry_:
             if len(entry_['person_who_care']) > 1:
                 log.warning('Some strange shit with person_who_care field for savings entry')
-            e_= EarningsEntry(entry_['sizeIncome'], entry_['person_who_care'][0]['person'], entry_['objectType'])
+            e_= EarningsEntry(amount_, entry_['person_who_care'][0]['person'], entry_['objectType'])
         assert e_ is not None
         earnings_entries.append(e_)
     return earnings_entries
